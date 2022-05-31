@@ -1,0 +1,6 @@
+*
+!.gitignore
+!go.mod
+!Makefile
+!main.go
+!run.sh
