@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os/exec"
 
@@ -10,7 +9,6 @@ import (
 )
 
 func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
-	fmt.Println("configure")
 	configureEvent := xproto.ConfigureNotifyEvent{
 		Event:            ev.Window,
 		Window:           ev.Window,
@@ -33,18 +31,19 @@ func HandleKeyPress(ev xproto.KeyPressEvent) {
 	}
 }
 
-func HandleMapNotify(ev xproto.MapNotifyEvent, conn *xgb.Conn, screenWidth uint16, screenHeight uint16) {
-	fmt.Println("Map")
-	attributes, err := xproto.GetWindowAttributes(conn, ev.Window).Reply()
+func HandleMapRequest(ev xproto.MapRequestEvent, conn *xgb.Conn, screenWidth uint32, screenHeight uint32) (err error) {
+	err = xproto.MapWindowChecked(conn, ev.Window).Check()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	if attributes.OverrideRedirect {
-		return
-	}
+	var mask uint16 = xproto.ConfigWindowX |
+		xproto.ConfigWindowY |
+		xproto.ConfigWindowWidth |
+		xproto.ConfigWindowHeight
+	values := []uint32{0, 0, screenWidth, screenHeight}
+	xproto.ConfigureWindowChecked(conn, ev.Window, mask, values)
 
-	values := []uint32{0, 0, uint32(screenWidth), uint32(screenHeight)}
-	xproto.ChangeWindowAttributesChecked(conn, ev.Window, xproto.CwEventMask, values).Check()
+	return nil
 }
 
 func main() {
@@ -87,8 +86,8 @@ func main() {
 			HandleKeyPress(event)
 		case xproto.ConfigureRequestEvent:
 			HandleConfigureRequest(event, conn)
-		case xproto.MapNotifyEvent:
-			HandleMapNotify(event, conn, screen.WidthInPixels, screen.HeightInPixels)
+		case xproto.MapRequestEvent:
+			HandleMapRequest(event, conn, uint32(screen.WidthInPixels), uint32(screen.HeightInPixels))
 		}
 	}
 }
