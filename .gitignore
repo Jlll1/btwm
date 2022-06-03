@@ -1,6 +1,7 @@
 *
 !.gitignore
 !go.mod
-!Makefile
+!LICENSE
 !main.go
+!Makefile
 !run.sh
