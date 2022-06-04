@@ -54,6 +54,9 @@ func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
 }
 
 func KillSelectedTag(conn *xgb.Conn) {
+	if selectedTag > len(windows) {
+		selectedTag = len(windows)
+	}
 	if selectedTag < 1 || len(windows) < 1 {
 		return
 	}
