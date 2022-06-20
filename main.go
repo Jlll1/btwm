@@ -15,6 +15,7 @@ type Client struct {
 }
 
 var stack []Client
+var screenWidth, screenHeight uint32
 
 func UnmanageWindow(window xproto.Window) {
 	var newStack []Client
@@ -71,6 +72,7 @@ func MakeTagSplit(tag int, conn *xgb.Conn) {
 		return
 	}
 	if stack[len(stack)-1].Tag == tag || stack[len(stack)-2].Tag == tag {
+		EnterSplitMode(conn, screenWidth)
 		return
 	}
 	var newStack []Client
@@ -88,6 +90,17 @@ func MakeTagSplit(tag int, conn *xgb.Conn) {
 		}
 		newStack = append(newStack, c)
 	}
+
+	EnterSplitMode(conn, screenWidth)
+}
+
+func EnterSplitMode(conn *xgb.Conn, screenWidth uint32) {
+	if len(stack) < 2 {
+		return
+	}
+	splitWidth := screenWidth / 2
+	xproto.ConfigureWindowChecked(conn, stack[len(stack)-1].Window, xproto.ConfigWindowWidth, []uint32{splitWidth})
+	xproto.ConfigureWindowChecked(conn, stack[len(stack)-2].Window, xproto.ConfigWindowX|xproto.ConfigWindowWidth, []uint32{splitWidth, splitWidth})
 }
 
 func KillSelectedTag(conn *xgb.Conn) {
@@ -176,6 +189,8 @@ func main() {
 	}
 
 	screen := connInfo.DefaultScreen(conn)
+	screenWidth = uint32(screen.WidthInPixels)
+	screenHeight = uint32(screen.HeightInPixels)
 	root := screen.Root
 
 	mask := []uint32{
@@ -220,7 +235,7 @@ func main() {
 		case xproto.ConfigureRequestEvent:
 			HandleConfigureRequest(event, conn)
 		case xproto.MapRequestEvent:
-			HandleMapRequest(event, conn, uint32(screen.WidthInPixels), uint32(screen.HeightInPixels))
+			HandleMapRequest(event, conn, uint32(screenWidth), uint32(screenHeight))
 		case xproto.UnmapNotifyEvent:
 			UnmanageWindow(event.Window)
 		case xproto.DestroyNotifyEvent:
