@@ -141,22 +141,58 @@ func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
 		}
 		Pop(1, conn)
 	case 11: // '2'
+		if shiftActive {
+			MakeTagSplit(2, conn)
+			break
+		}
 		Pop(2, conn)
 	case 12: // '3'
+		if shiftActive {
+			MakeTagSplit(3, conn)
+			break
+		}
 		Pop(3, conn)
 	case 13: // '4'
+		if shiftActive {
+			MakeTagSplit(4, conn)
+			break
+		}
 		Pop(4, conn)
 	case 14: // '5'
+		if shiftActive {
+			MakeTagSplit(5, conn)
+			break
+		}
 		Pop(5, conn)
 	case 15: // '6'
+		if shiftActive {
+			MakeTagSplit(6, conn)
+			break
+		}
 		Pop(6, conn)
 	case 16: // '7'
+		if shiftActive {
+			MakeTagSplit(7, conn)
+			break
+		}
 		Pop(7, conn)
 	case 17: // '8'
+		if shiftActive {
+			MakeTagSplit(8, conn)
+			break
+		}
 		Pop(8, conn)
 	case 18: // '1'
+		if shiftActive {
+			MakeTagSplit(9, conn)
+			break
+		}
 		Pop(9, conn)
 	case 19: // '10'
+		if shiftActive {
+			MakeTagSplit(10, conn)
+			break
+		}
 		Pop(10, conn)
 	}
 }
@@ -206,17 +242,28 @@ func main() {
 	}
 
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 33, xproto.GrabModeAsync, xproto.GrabModeAsync)
+
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 10, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 10, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 11, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 11, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 12, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 12, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 13, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 13, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 14, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 14, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 15, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 15, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 16, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 16, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 17, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 17, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 18, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 18, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 19, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 19, xproto.GrabModeAsync, xproto.GrabModeAsync)
+
 	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 54, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 58, xproto.GrabModeAsync, xproto.GrabModeAsync)
 
