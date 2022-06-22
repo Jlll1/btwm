@@ -10,14 +10,32 @@ import (
 )
 
 type Client struct {
-	Window xproto.Window
-	Tag    int
+	Window      xproto.Window
+	Tag         int
+	XPos, Width uint32
 }
 
 var stack []Client
 var screenWidth, screenHeight uint32
+var isInSplitMode bool
 
-func UnmanageWindow(window xproto.Window) {
+func (c *Client) SetPos(conn *xgb.Conn, x, width uint32) error {
+	err := xproto.ConfigureWindowChecked(
+		conn,
+		c.Window,
+		xproto.ConfigWindowX|xproto.ConfigWindowWidth,
+		[]uint32{x, width}).Check()
+	if err != nil {
+		return err
+	}
+
+	c.XPos = x
+	c.Width = width
+
+	return nil
+}
+
+func UnmanageWindow(conn *xgb.Conn, window xproto.Window) {
 	var newStack []Client
 	for _, c := range stack {
 		if c.Window == window {
@@ -26,6 +44,10 @@ func UnmanageWindow(window xproto.Window) {
 		newStack = append(newStack, c)
 	}
 	stack = newStack
+
+	if isInSplitMode {
+		ExitSplitMode(conn, screenWidth)
+	}
 }
 
 func Pop(tag int, conn *xgb.Conn) {
@@ -42,13 +64,20 @@ func Pop(tag int, conn *xgb.Conn) {
 	var clientToPutOnTop Client
 	for _, c := range stack {
 		if c.Tag == tag {
-			xproto.ConfigureWindowChecked(conn, c.Window, mask, values)
+			err := xproto.ConfigureWindowChecked(conn, c.Window, mask, values).Check()
+			if err != nil {
+				return
+			}
 			clientToPutOnTop = c
 			continue
 		}
 		newStack = append(newStack, c)
 	}
 	stack = append(newStack, clientToPutOnTop)
+
+	if isInSplitMode {
+		ExitSplitMode(conn, screenWidth)
+	}
 }
 
 func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
@@ -70,6 +99,9 @@ func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
 func MakeTagSplit(tag int, conn *xgb.Conn) {
 	if len(stack) < 2 {
 		return
+	}
+	if isInSplitMode {
+		ExitSplitMode(conn, screenWidth)
 	}
 	if stack[len(stack)-1].Tag == tag || stack[len(stack)-2].Tag == tag {
 		EnterSplitMode(conn, screenWidth)
@@ -99,8 +131,31 @@ func EnterSplitMode(conn *xgb.Conn, screenWidth uint32) {
 		return
 	}
 	splitWidth := screenWidth / 2
-	xproto.ConfigureWindowChecked(conn, stack[len(stack)-1].Window, xproto.ConfigWindowWidth, []uint32{splitWidth})
-	xproto.ConfigureWindowChecked(conn, stack[len(stack)-2].Window, xproto.ConfigWindowX|xproto.ConfigWindowWidth, []uint32{splitWidth, splitWidth})
+	err := stack[len(stack)-1].SetPos(conn, 0, splitWidth)
+	if err != nil {
+		return
+	}
+	err = stack[len(stack)-2].SetPos(conn, splitWidth, splitWidth)
+	if err != nil {
+		return
+	}
+	isInSplitMode = true
+}
+
+func ExitSplitMode(conn *xgb.Conn, screenWidth uint32) {
+	if len(stack) < 1 {
+		return
+	}
+
+	for _, c := range stack {
+		if c.Width != screenWidth {
+			err := c.SetPos(conn, 0, screenWidth)
+			if err != nil {
+				return
+			}
+		}
+	}
+	isInSplitMode = false
 }
 
 func KillSelectedTag(conn *xgb.Conn) {
@@ -113,6 +168,10 @@ func KillSelectedTag(conn *xgb.Conn) {
 		return
 	}
 	stack = stack[:len(stack)-1]
+
+	if isInSplitMode {
+		ExitSplitMode(conn, screenWidth)
+	}
 }
 
 func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
@@ -207,9 +266,16 @@ func HandleMapRequest(ev xproto.MapRequestEvent, conn *xgb.Conn, screenWidth uin
 		xproto.ConfigWindowWidth |
 		xproto.ConfigWindowHeight
 	values := []uint32{0, 0, screenWidth, screenHeight}
-	xproto.ConfigureWindowChecked(conn, ev.Window, mask, values)
+	err = xproto.ConfigureWindowChecked(conn, ev.Window, mask, values).Check()
+	if err != nil {
+		return err
+	}
+	stack = append(stack, Client{ev.Window, len(stack) + 1, 0, screenWidth})
 
-	stack = append(stack, Client{ev.Window, len(stack) + 1})
+	if isInSplitMode {
+		ExitSplitMode(conn, screenWidth)
+	}
+
 	return nil
 }
 
@@ -284,9 +350,9 @@ func main() {
 		case xproto.MapRequestEvent:
 			HandleMapRequest(event, conn, uint32(screenWidth), uint32(screenHeight))
 		case xproto.UnmapNotifyEvent:
-			UnmanageWindow(event.Window)
+			UnmanageWindow(conn, event.Window)
 		case xproto.DestroyNotifyEvent:
-			UnmanageWindow(event.Window)
+			UnmanageWindow(conn, event.Window)
 		}
 	}
 }
