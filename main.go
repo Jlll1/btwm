@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -17,7 +18,40 @@ type Client struct {
 
 var stack []Client
 var screenWidth, screenHeight uint32
-var isInSplitMode bool
+var splitMasterTag int
+
+func IsInSplitMode() bool {
+	return splitMasterTag > 0
+}
+
+func HandleEnterNotifyEvent(ev xproto.EnterNotifyEvent) {
+	if !IsInSplitMode() {
+		return
+	}
+	targetClient, err := WindowToClient(ev.Event)
+	if err != nil {
+		return
+	}
+	splitMasterTag = targetClient.Tag
+}
+
+func WindowToClient(window xproto.Window) (client Client, err error) {
+	for _, c := range stack {
+		if c.Window == window {
+			return c, nil
+		}
+	}
+	return client, fmt.Errorf("couldn't find client associated to specified window")
+}
+
+func TagToClient(tag int) (client Client, err error) {
+	for _, c := range stack {
+		if c.Tag == tag {
+			return c, nil
+		}
+	}
+	return client, fmt.Errorf("couldn't find client associated to specified tag")
+}
 
 func (c *Client) SetPos(conn *xgb.Conn, x, width uint32) error {
 	err := xproto.ConfigureWindowChecked(
@@ -45,7 +79,7 @@ func UnmanageWindow(conn *xgb.Conn, window xproto.Window) {
 	}
 	stack = newStack
 
-	if isInSplitMode {
+	if IsInSplitMode() {
 		ExitSplitMode(conn, screenWidth)
 	}
 }
@@ -75,7 +109,7 @@ func Pop(tag int, conn *xgb.Conn) {
 	}
 	stack = append(newStack, clientToPutOnTop)
 
-	if isInSplitMode {
+	if IsInSplitMode() {
 		ExitSplitMode(conn, screenWidth)
 	}
 }
@@ -100,7 +134,7 @@ func MakeTagSplit(tag int, conn *xgb.Conn) {
 	if len(stack) < 2 {
 		return
 	}
-	if isInSplitMode {
+	if IsInSplitMode() {
 		ExitSplitMode(conn, screenWidth)
 	}
 	if stack[len(stack)-1].Tag == tag || stack[len(stack)-2].Tag == tag {
@@ -131,7 +165,8 @@ func EnterSplitMode(conn *xgb.Conn, screenWidth uint32) {
 		return
 	}
 	splitWidth := screenWidth / 2
-	err := stack[len(stack)-1].SetPos(conn, 0, splitWidth)
+	splitMasterClient := &stack[len(stack)-1]
+	err := splitMasterClient.SetPos(conn, 0, splitWidth)
 	if err != nil {
 		return
 	}
@@ -139,7 +174,7 @@ func EnterSplitMode(conn *xgb.Conn, screenWidth uint32) {
 	if err != nil {
 		return
 	}
-	isInSplitMode = true
+	splitMasterTag = splitMasterClient.Tag
 }
 
 func ExitSplitMode(conn *xgb.Conn, screenWidth uint32) {
@@ -155,23 +190,30 @@ func ExitSplitMode(conn *xgb.Conn, screenWidth uint32) {
 			}
 		}
 	}
-	isInSplitMode = false
+	splitMasterTag = 0
 }
 
 func KillSelectedTag(conn *xgb.Conn) {
 	if len(stack) < 1 {
 		return
 	}
-	windowToKill := stack[len(stack)-1].Window
-	err := xproto.KillClientChecked(conn, uint32(windowToKill)).Check()
+	windowToKill, err := (func() (xproto.Window, error) {
+		if IsInSplitMode() {
+			client, err := TagToClient(splitMasterTag)
+			return client.Window, err
+		} else {
+			return stack[len(stack)-1].Window, nil
+		}
+	})()
 	if err != nil {
 		return
 	}
-	stack = stack[:len(stack)-1]
-
-	if isInSplitMode {
-		ExitSplitMode(conn, screenWidth)
+	err = xproto.KillClientChecked(conn, uint32(windowToKill)).Check()
+	if err != nil {
+		return
 	}
+
+	UnmanageWindow(conn, windowToKill)
 }
 
 func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
@@ -272,8 +314,13 @@ func HandleMapRequest(ev xproto.MapRequestEvent, conn *xgb.Conn, screenWidth uin
 	}
 	stack = append(stack, Client{ev.Window, len(stack) + 1, 0, screenWidth})
 
-	if isInSplitMode {
+	if IsInSplitMode() {
 		ExitSplitMode(conn, screenWidth)
+	}
+
+	err = xproto.ChangeWindowAttributesChecked(conn, ev.Window, xproto.CwEventMask, []uint32{xproto.EventMaskEnterWindow}).Check()
+	if err != nil {
+		return err
 	}
 
 	return nil
@@ -353,6 +400,8 @@ func main() {
 			UnmanageWindow(conn, event.Window)
 		case xproto.DestroyNotifyEvent:
 			UnmanageWindow(conn, event.Window)
+		case xproto.EnterNotifyEvent:
+			HandleEnterNotifyEvent(event)
 		}
 	}
 }
