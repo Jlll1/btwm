@@ -59,6 +59,14 @@ func (c *Client) Reconfigure(conn *xgb.Conn) (err error) {
 	return err
 }
 
+func (c *Client) Focus(conn *xgb.Conn) error {
+	return xproto.ConfigureWindowChecked(
+		conn,
+		c.Window,
+		xproto.ConfigWindowStackMode,
+		[]uint32{xproto.StackModeAbove}).Check()
+}
+
 var clients []*Client
 
 func FindClient(predicate func(*Client) bool) *Client {
@@ -105,11 +113,11 @@ func UnmanageWindow(conn *xgb.Conn, window xproto.Window) {
 	}
 }
 
-func Pop(tag int, conn *xgb.Conn) {
+func FocusTag(tag int, conn *xgb.Conn) {
 	if len(clients) < 2 {
 		return
 	}
-	if len(clients) < tag || tag < 0 {
+	if len(clients) < tag || tag < 1 {
 		return
 	}
 
@@ -117,10 +125,7 @@ func Pop(tag int, conn *xgb.Conn) {
 	if clientToPutOnTop == nil {
 		return
 	}
-	var mask uint16 = xproto.ConfigWindowStackMode
-	values := []uint32{xproto.StackModeAbove}
-	err := xproto.ConfigureWindowChecked(conn, clientToPutOnTop.Window, mask, values).Check()
-	if err != nil {
+	if err := clientToPutOnTop.Focus(conn); err != nil {
 		return
 	}
 
@@ -231,61 +236,61 @@ func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
 			MakeTagSplit(1, conn)
 			break
 		}
-		Pop(1, conn)
+		FocusTag(1, conn)
 	case 11: // '2'
 		if shiftActive {
 			MakeTagSplit(2, conn)
 			break
 		}
-		Pop(2, conn)
+		FocusTag(2, conn)
 	case 12: // '3'
 		if shiftActive {
 			MakeTagSplit(3, conn)
 			break
 		}
-		Pop(3, conn)
+		FocusTag(3, conn)
 	case 13: // '4'
 		if shiftActive {
 			MakeTagSplit(4, conn)
 			break
 		}
-		Pop(4, conn)
+		FocusTag(4, conn)
 	case 14: // '5'
 		if shiftActive {
 			MakeTagSplit(5, conn)
 			break
 		}
-		Pop(5, conn)
+		FocusTag(5, conn)
 	case 15: // '6'
 		if shiftActive {
 			MakeTagSplit(6, conn)
 			break
 		}
-		Pop(6, conn)
+		FocusTag(6, conn)
 	case 16: // '7'
 		if shiftActive {
 			MakeTagSplit(7, conn)
 			break
 		}
-		Pop(7, conn)
+		FocusTag(7, conn)
 	case 17: // '8'
 		if shiftActive {
 			MakeTagSplit(8, conn)
 			break
 		}
-		Pop(8, conn)
+		FocusTag(8, conn)
 	case 18: // '1'
 		if shiftActive {
 			MakeTagSplit(9, conn)
 			break
 		}
-		Pop(9, conn)
+		FocusTag(9, conn)
 	case 19: // '10'
 		if shiftActive {
 			MakeTagSplit(10, conn)
 			break
 		}
-		Pop(10, conn)
+		FocusTag(10, conn)
 	}
 }
 
