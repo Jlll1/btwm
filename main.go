@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -12,20 +11,17 @@ import (
 
 type position struct{ X, Y uint32 }
 type size struct{ Width, Height uint32 }
-
 type Client struct {
 	Window          xproto.Window
-	Tag             int
 	currentPosition position
 	currentSize     size
 	Position        position
 	Size            size
 }
 
-func NewClient(window xproto.Window, tag int, posX, posY, width, height uint32) *Client {
+func NewClient(window xproto.Window, posX, posY, width, height uint32) *Client {
 	return &Client{
 		window,
-		tag,
 		position{posX, posY},
 		size{width, height},
 		position{posX, posY},
@@ -63,46 +59,46 @@ func (c *Client) Reconfigure(conn *xgb.Conn) (err error) {
 	return err
 }
 
-var stack []Client
+var clients []*Client
+
+func FindClient(predicate func(*Client) bool) *Client {
+	for _, c := range clients {
+		if predicate(c) {
+			return c
+		}
+	}
+	return nil
+}
+
+func FindClientByWindow(window xproto.Window) *Client {
+	return FindClient(func(c *Client) bool { return c.Window == window })
+}
+
+func FindClientByTag(tag int) *Client {
+	return clients[tag-1]
+}
+
 var screenWidth, screenHeight uint32
 var focusedClient *Client
 var isInSplitMode bool
 
 func HandleEnterNotifyEvent(ev xproto.EnterNotifyEvent) {
-	targetClient, err := WindowToClient(ev.Event)
-	if err != nil {
+	targetClient := FindClientByWindow(ev.Event)
+	if targetClient == nil {
 		return
 	}
-	focusedClient = &targetClient
-}
-
-func WindowToClient(window xproto.Window) (client Client, err error) {
-	for _, c := range stack {
-		if c.Window == window {
-			return c, nil
-		}
-	}
-	return client, fmt.Errorf("couldn't find client associated to specified window")
-}
-
-func TagToClient(tag int) (client Client, err error) {
-	for _, c := range stack {
-		if c.Tag == tag {
-			return c, nil
-		}
-	}
-	return client, fmt.Errorf("couldn't find client associated to specified tag")
+	focusedClient = targetClient
 }
 
 func UnmanageWindow(conn *xgb.Conn, window xproto.Window) {
-	var newStack []Client
-	for _, c := range stack {
+	var newStack []*Client
+	for _, c := range clients {
 		if c.Window == window {
 			continue
 		}
 		newStack = append(newStack, c)
 	}
-	stack = newStack
+	clients = newStack
 
 	if isInSplitMode {
 		ExitSplitMode(conn, screenWidth)
@@ -110,29 +106,23 @@ func UnmanageWindow(conn *xgb.Conn, window xproto.Window) {
 }
 
 func Pop(tag int, conn *xgb.Conn) {
-	if len(stack) < 2 {
+	if len(clients) < 2 {
 		return
 	}
-	if len(stack) < tag || tag < 0 {
+	if len(clients) < tag || tag < 0 {
 		return
 	}
 
+	clientToPutOnTop := FindClientByTag(tag)
+	if clientToPutOnTop == nil {
+		return
+	}
 	var mask uint16 = xproto.ConfigWindowStackMode
 	values := []uint32{xproto.StackModeAbove}
-	var newStack []Client
-	var clientToPutOnTop Client
-	for _, c := range stack {
-		if c.Tag == tag {
-			err := xproto.ConfigureWindowChecked(conn, c.Window, mask, values).Check()
-			if err != nil {
-				return
-			}
-			clientToPutOnTop = c
-			continue
-		}
-		newStack = append(newStack, c)
+	err := xproto.ConfigureWindowChecked(conn, clientToPutOnTop.Window, mask, values).Check()
+	if err != nil {
+		return
 	}
-	stack = append(newStack, clientToPutOnTop)
 
 	if isInSplitMode {
 		ExitSplitMode(conn, screenWidth)
@@ -156,48 +146,32 @@ func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
 }
 
 func MakeTagSplit(tag int, conn *xgb.Conn) {
-	if len(stack) < 2 {
+	if len(clients) < 2 {
 		return
 	}
 	if isInSplitMode {
 		ExitSplitMode(conn, screenWidth)
 	}
-	if stack[len(stack)-1].Tag == tag || stack[len(stack)-2].Tag == tag {
-		EnterSplitMode(conn, screenWidth)
+	splitMasterClient := focusedClient
+	splitSlaveClient := FindClientByTag(tag)
+	if splitSlaveClient == nil {
 		return
 	}
-	var newStack []Client
-	var clientToPutOnSplit Client
-	for i, c := range stack {
-		if c.Tag == tag {
-			clientToPutOnSplit = c
-			continue
-		}
-		if i == len(stack)-1 {
-			var mask uint16 = xproto.ConfigWindowSibling | xproto.ConfigWindowStackMode
-			values := []uint32{uint32(c.Window), xproto.StackModeBelow}
-			xproto.ConfigureWindowChecked(conn, clientToPutOnSplit.Window, mask, values)
-			newStack = append(newStack, clientToPutOnSplit)
-		}
-		newStack = append(newStack, c)
-	}
 
-	EnterSplitMode(conn, screenWidth)
-}
-
-func EnterSplitMode(conn *xgb.Conn, screenWidth uint32) {
-	if len(stack) < 2 {
-		return
-	}
-	splitWidth := screenWidth / 2
-	splitMasterClient := &stack[len(stack)-1]
-	splitMasterClient.Position.X = 0
-	splitMasterClient.Size.Width = splitWidth
-	err := splitMasterClient.Reconfigure(conn)
+	var mask uint16 = xproto.ConfigWindowSibling | xproto.ConfigWindowStackMode
+	values := []uint32{uint32(splitMasterClient.Window), xproto.StackModeBelow}
+	err := xproto.ConfigureWindowChecked(conn, splitSlaveClient.Window, mask, values).Check()
 	if err != nil {
 		return
 	}
-	splitSlaveClient := &stack[len(stack)-2]
+
+	splitWidth := screenWidth / 2
+	splitMasterClient.Position.X = 0
+	splitMasterClient.Size.Width = splitWidth
+	err = splitMasterClient.Reconfigure(conn)
+	if err != nil {
+		return
+	}
 	splitSlaveClient.Position.X = splitWidth
 	splitSlaveClient.Size.Width = splitWidth
 	err = splitSlaveClient.Reconfigure(conn)
@@ -208,11 +182,7 @@ func EnterSplitMode(conn *xgb.Conn, screenWidth uint32) {
 }
 
 func ExitSplitMode(conn *xgb.Conn, screenWidth uint32) {
-	if len(stack) < 1 {
-		return
-	}
-
-	for _, c := range stack {
+	for _, c := range clients {
 		if c.Size.Width != screenWidth {
 			c.Position.X = 0
 			c.Size.Width = screenWidth
@@ -226,7 +196,7 @@ func ExitSplitMode(conn *xgb.Conn, screenWidth uint32) {
 }
 
 func KillSelectedTag(conn *xgb.Conn) {
-	if len(stack) < 1 {
+	if len(clients) < 1 {
 		return
 	}
 	err := xproto.KillClientChecked(conn, uint32(focusedClient.Window)).Check()
@@ -338,7 +308,7 @@ func HandleMapRequest(ev xproto.MapRequestEvent, conn *xgb.Conn, screenWidth uin
 	if err != nil {
 		return err
 	}
-	stack = append(stack, *NewClient(ev.Window, len(stack)+1, 0, 0, screenWidth, screenHeight))
+	clients = append(clients, NewClient(ev.Window, 0, 0, screenWidth, screenHeight))
 
 	if isInSplitMode {
 		ExitSplitMode(conn, screenWidth)
