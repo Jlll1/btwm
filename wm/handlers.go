@@ -1,6 +1,8 @@
 package wm
 
 import (
+	"fmt"
+
 	"github.com/Jlll1/btwm/clients"
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
@@ -60,6 +62,9 @@ func handleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
 }
 
 func handleMapRequest(ev xproto.MapRequestEvent, conn *xgb.Conn) (err error) {
+	if clients.FindByWindow(ev.Window) != nil {
+		return fmt.Errorf("attempted to remap a window that has already been mapped")
+	}
 	err = xproto.ChangeWindowAttributesChecked(
 		conn, ev.Window, xproto.CwEventMask, []uint32{xproto.EventMaskEnterWindow}).Check()
 	if err != nil {
