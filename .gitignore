@@ -1,6 +1,9 @@
 *
 !.gitignore
 !go.mod
+!clients/
+!client.go
+!clients.go
 !LICENSE
 !main.go
 !Makefile
