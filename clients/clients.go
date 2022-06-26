@@ -6,13 +6,16 @@ import (
 
 var clients []*Client
 
-func findClient(predicate func(*Client) bool) *Client {
-	for _, c := range clients {
-		if predicate(c) {
-			return c
-		}
-	}
-	return nil
+func Add(clientToAdd *Client) {
+	clients = append(clients, clientToAdd)
+}
+
+func FindByTag(tag int) *Client {
+	return clients[tag-1]
+}
+
+func FindByWindow(window xproto.Window) *Client {
+	return findClient(func(c *Client) bool { return c.Window == window })
 }
 
 func FindMany(predicate func(*Client) bool) []*Client {
@@ -25,18 +28,6 @@ func FindMany(predicate func(*Client) bool) []*Client {
 	return result
 }
 
-func FindByWindow(window xproto.Window) *Client {
-	return findClient(func(c *Client) bool { return c.Window == window })
-}
-
-func FindByTag(tag int) *Client {
-	return clients[tag-1]
-}
-
-func Add(clientToAdd *Client) {
-	clients = append(clients, clientToAdd)
-}
-
 func Remove(clientToRemove *Client) {
 	var newClients []*Client
 	for _, c := range clients {
@@ -45,4 +36,13 @@ func Remove(clientToRemove *Client) {
 		}
 	}
 	clients = newClients
+}
+
+func findClient(predicate func(*Client) bool) *Client {
+	for _, c := range clients {
+		if predicate(c) {
+			return c
+		}
+	}
+	return nil
 }

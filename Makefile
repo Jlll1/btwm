@@ -1,9 +1,12 @@
-btwm: main.go
+build: clean
 	go build -o btwm main.go
 
-run: btwm
+run: build
 	echo "exec ./btwm" > xinitrc
 	./run.sh
 
 clean:
-	rm btwm xinitrc
+	go clean
+	rm -f xinitrc
+
+.PHONY: build run clean

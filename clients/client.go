@@ -27,6 +27,24 @@ func NewClient(window xproto.Window, posX, posY, width, height uint32) *Client {
 	}
 }
 
+func (c *Client) Focus(conn *xgb.Conn) (err error) {
+	return xproto.ConfigureWindowChecked(
+		conn,
+		c.Window,
+		xproto.ConfigWindowStackMode,
+		[]uint32{xproto.StackModeAbove}).Check()
+}
+
+func (c *Client) Kill(conn *xgb.Conn) (err error) {
+	return xproto.KillClientChecked(conn, uint32(c.Window)).Check()
+}
+
+func (c *Client) PutBelow(window xproto.Window, conn *xgb.Conn) (err error) {
+	var mask uint16 = xproto.ConfigWindowSibling | xproto.ConfigWindowStackMode
+	values := []uint32{uint32(window), xproto.StackModeBelow}
+	return xproto.ConfigureWindowChecked(conn, c.Window, mask, values).Check()
+}
+
 func (c *Client) Reconfigure(conn *xgb.Conn) (err error) {
 	var mask uint16
 	var values []uint32
@@ -58,18 +76,4 @@ func (c *Client) Reconfigure(conn *xgb.Conn) (err error) {
 		}
 	}
 	return err
-}
-
-func (c *Client) Focus(conn *xgb.Conn) (err error) {
-	return xproto.ConfigureWindowChecked(
-		conn,
-		c.Window,
-		xproto.ConfigWindowStackMode,
-		[]uint32{xproto.StackModeAbove}).Check()
-}
-
-func (c *Client) PutBelow(window xproto.Window, conn *xgb.Conn) (err error) {
-	var mask uint16 = xproto.ConfigWindowSibling | xproto.ConfigWindowStackMode
-	values := []uint32{uint32(window), xproto.StackModeBelow}
-	return xproto.ConfigureWindowChecked(conn, c.Window, mask, values).Check()
 }
