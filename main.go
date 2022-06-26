@@ -33,6 +33,7 @@ func main() {
 	}
 
 	configuration.Load()
+	wm.InitAtoms(conn)
 	wm.SetScreenDimensions(uint32(screen.WidthInPixels), uint32(screen.HeightInPixels))
 	wm.GrabKeys(conn, root)
 
