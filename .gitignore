@@ -17,6 +17,4 @@
 !.gitignore
 !go.mod
 !LICENSE
-!Makefile
 !README.md
-!run.sh
