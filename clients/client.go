@@ -44,6 +44,9 @@ func (c *Client) Kill(conn *xgb.Conn, atomWMProtocols, atomWMDeleteWindow xproto
 		return err
 	}
 	if prop == nil {
+		if err = xproto.SetCloseDownModeChecked(conn, xproto.CloseDownDestroyAll).Check(); err != nil {
+			return err
+		}
 		return xproto.DestroyWindowChecked(conn, c.Window).Check()
 	}
 	for propValue := prop.Value; len(propValue) >= 4; propValue = propValue[4:] {
