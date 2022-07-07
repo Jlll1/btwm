@@ -31,6 +31,26 @@ func FindMany(predicate func(*Client) bool) []*Client {
 	return result
 }
 
+func MoveOneTagDown(clientToMove *Client) {
+  for i, c := range clients {
+    if c == clientToMove {
+      if i-1 >= 0 {
+        clients[i-1], clients[i] = clients[i], clients[i-1]
+      }
+    }
+  }
+}
+
+func MoveOneTagUp(clientToMove *Client) {
+  for i, c := range clients {
+    if c == clientToMove {
+      if i+1 < len(clients) {
+        clients[i+1], clients[i] = clients[i], clients[i+1]
+      }
+    }
+  }
+}
+
 func Remove(clientToRemove *Client) {
 	var newClients []*Client
 	for _, c := range clients {

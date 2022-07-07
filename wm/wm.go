@@ -100,6 +100,14 @@ func killFocusedClient(conn *xgb.Conn) {
 	}
 }
 
+func moveFocusedClientOneTagDown() {
+  clients.MoveOneTagDown(focusedClient)
+}
+
+func moveFocusedClientOneTagUp() {
+  clients.MoveOneTagUp(focusedClient)
+}
+
 func unmanageWindow(window xproto.Window, conn *xgb.Conn) {
 	clientToRemove := clients.FindByWindow(window)
 	if clientToRemove == nil {
