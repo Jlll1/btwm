@@ -9,32 +9,45 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
-var windows []xproto.Window
-var selectedTag int
+type Client struct {
+	Window xproto.Window
+	Tag    int
+}
+
+var stack []Client
 
 func UnmanageWindow(window xproto.Window) {
-	var newWindows []xproto.Window
-	for _, win := range windows {
-		if win == window {
+	var newStack []Client
+	for _, c := range stack {
+		if c.Window == window {
 			continue
 		}
-		newWindows = append(newWindows, win)
+		newStack = append(newStack, c)
 	}
-	windows = newWindows
+	stack = newStack
 }
 
 func Pop(tag int, conn *xgb.Conn) {
-	if len(windows) < 2 {
+	if len(stack) < 2 {
 		return
 	}
-	if len(windows) < tag || tag < 0 {
+	if len(stack) < tag || tag < 0 {
 		return
 	}
 
 	var mask uint16 = xproto.ConfigWindowStackMode
 	values := []uint32{xproto.StackModeAbove}
-	xproto.ConfigureWindowChecked(conn, windows[tag-1], mask, values)
-	selectedTag = tag
+	var newStack []Client
+	var clientToPutOnTop Client
+	for _, c := range stack {
+		if c.Tag == tag {
+			xproto.ConfigureWindowChecked(conn, c.Window, mask, values)
+			clientToPutOnTop = c
+			continue
+		}
+		newStack = append(newStack, c)
+	}
+	stack = append(newStack, clientToPutOnTop)
 }
 
 func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
@@ -54,18 +67,15 @@ func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
 }
 
 func KillSelectedTag(conn *xgb.Conn) {
-	if selectedTag > len(windows) {
-		selectedTag = len(windows)
-	}
-	if selectedTag < 1 || len(windows) < 1 {
+	if len(stack) < 1 {
 		return
 	}
-	windowToKill := windows[selectedTag-1]
+	windowToKill := stack[len(stack)-1].Window
 	err := xproto.KillClientChecked(conn, uint32(windowToKill)).Check()
 	if err != nil {
 		return
 	}
-	UnmanageWindow(windowToKill)
+	stack = stack[:len(stack)-1]
 }
 
 func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
@@ -122,8 +132,7 @@ func HandleMapRequest(ev xproto.MapRequestEvent, conn *xgb.Conn, screenWidth uin
 	values := []uint32{0, 0, screenWidth, screenHeight}
 	xproto.ConfigureWindowChecked(conn, ev.Window, mask, values)
 
-	windows = append(windows, ev.Window)
-	selectedTag = len(windows)
+	stack = append(stack, Client{ev.Window, len(stack) + 1})
 	return nil
 }
 
