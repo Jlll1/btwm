@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"os"
 	"os/exec"
 
 	"github.com/jezek/xgb"
@@ -10,6 +11,17 @@ import (
 
 var windows []xproto.Window
 var selectedTag int
+
+func UnmanageWindow(window xproto.Window) {
+	var newWindows []xproto.Window
+	for _, win := range windows {
+		if win == window {
+			continue
+		}
+		newWindows = append(newWindows, win)
+	}
+	windows = newWindows
+}
 
 func Pop(tag int, conn *xgb.Conn) {
 	if len(windows) < 2 {
@@ -50,16 +62,7 @@ func KillSelectedTag(conn *xgb.Conn) {
 	if err != nil {
 		return
 	}
-
-	var newWindows []xproto.Window
-	for i, win := range windows {
-		if i == selectedTag-1 {
-			continue
-		}
-		newWindows = append(newWindows, win)
-	}
-	windows = newWindows
-	selectedTag = len(windows)
+	UnmanageWindow(windowToKill)
 }
 
 func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
@@ -69,13 +72,17 @@ func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
 		return
 	}
 
-	// Handle quitting the wm
 	switch ev.Detail {
 	case 33: // 'p'
 		exec.Command("dmenu_run").Run()
 	case 54: // 'c'
 		if shiftActive {
 			KillSelectedTag(conn)
+		}
+	case 58:
+		if shiftActive {
+			conn.Close()
+			os.Exit(0)
 		}
 	case 10: // '1'
 		Pop(1, conn)
@@ -155,6 +162,7 @@ func main() {
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 18, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 19, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 54, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 58, xproto.GrabModeAsync, xproto.GrabModeAsync)
 
 	for {
 		ev, err := conn.WaitForEvent()
@@ -172,6 +180,10 @@ func main() {
 			HandleConfigureRequest(event, conn)
 		case xproto.MapRequestEvent:
 			HandleMapRequest(event, conn, uint32(screen.WidthInPixels), uint32(screen.HeightInPixels))
+		case xproto.UnmapNotifyEvent:
+			UnmanageWindow(event.Window)
+		case xproto.DestroyNotifyEvent:
+			UnmanageWindow(event.Window)
 		}
 	}
 }
