@@ -86,6 +86,16 @@ func FindClientByTag(tag int) *Client {
 	return clients[tag-1]
 }
 
+func RemoveClientByWindow(window xproto.Window) {
+	var newClients []*Client
+	for _, c := range clients {
+		if c.Window != window {
+			newClients = append(newClients, c)
+		}
+	}
+	clients = newClients
+}
+
 var screenWidth, screenHeight uint32
 var focusedClient *Client
 var isInSplitMode bool
@@ -99,14 +109,7 @@ func HandleEnterNotifyEvent(ev xproto.EnterNotifyEvent) {
 }
 
 func UnmanageWindow(conn *xgb.Conn, window xproto.Window) {
-	var newStack []*Client
-	for _, c := range clients {
-		if c.Window == window {
-			continue
-		}
-		newStack = append(newStack, c)
-	}
-	clients = newStack
+	RemoveClientByWindow(window)
 
 	if isInSplitMode {
 		ExitSplitMode(conn, screenWidth)
@@ -200,7 +203,7 @@ func ExitSplitMode(conn *xgb.Conn, screenWidth uint32) {
 	isInSplitMode = false
 }
 
-func KillSelectedTag(conn *xgb.Conn) {
+func KillSelectedClient(conn *xgb.Conn) {
 	if len(clients) < 1 {
 		return
 	}
@@ -224,7 +227,7 @@ func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
 		exec.Command("dmenu_run").Run()
 	case 54: // 'c'
 		if shiftActive {
-			KillSelectedTag(conn)
+			KillSelectedClient(conn)
 		}
 	case 58:
 		if shiftActive {
