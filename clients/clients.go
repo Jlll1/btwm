@@ -11,6 +11,9 @@ func Add(clientToAdd *Client) {
 }
 
 func FindByTag(tag int) *Client {
+	if len(clients) < tag {
+		return nil
+	}
 	return clients[tag-1]
 }
 

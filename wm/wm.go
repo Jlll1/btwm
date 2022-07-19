@@ -76,7 +76,7 @@ func focusTag(tag int, conn *xgb.Conn) {
 }
 
 func killFocusedClient(conn *xgb.Conn) {
-	if err := focusedClient.Kill(conn); err != nil {
+	if err := focusedClient.Kill(conn); err == nil {
 		unmanageWindow(focusedClient.Window, conn)
 	}
 }
