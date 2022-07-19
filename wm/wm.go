@@ -1,6 +1,8 @@
 package wm
 
 import (
+	"log"
+
 	"github.com/Jlll1/btwm/clients"
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
@@ -9,6 +11,23 @@ import (
 var isInSplitMode bool
 var screenWidth, screenHeight uint32
 var focusedClient *clients.Client
+var atomWMProtocols, atomWMDeleteWindow xproto.Atom
+
+func InitAtoms(conn *xgb.Conn) {
+	getAtom := func(name string) xproto.Atom {
+		reply, err := xproto.InternAtom(conn, false, uint16(len(name)), name).Reply()
+		if err != nil {
+			log.Fatal(err)
+		}
+		if reply == nil {
+			return 0
+		}
+		return reply.Atom
+	}
+
+	atomWMProtocols = getAtom("WM_PROTOCOLS")
+	atomWMDeleteWindow = getAtom("WM_DELETE_WINDOW")
+}
 
 func SetScreenDimensions(width, height uint32) {
 	screenWidth = width
@@ -76,7 +95,7 @@ func focusTag(tag int, conn *xgb.Conn) {
 }
 
 func killFocusedClient(conn *xgb.Conn) {
-	if err := focusedClient.Kill(conn); err == nil {
+	if err := focusedClient.Kill(conn, atomWMProtocols, atomWMDeleteWindow); err == nil {
 		unmanageWindow(focusedClient.Window, conn)
 	}
 }

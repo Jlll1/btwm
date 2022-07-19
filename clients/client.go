@@ -1,6 +1,8 @@
 package clients
 
 import (
+	"time"
+
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
 )
@@ -35,8 +37,39 @@ func (c *Client) Focus(conn *xgb.Conn) (err error) {
 		[]uint32{xproto.StackModeAbove}).Check()
 }
 
-func (c *Client) Kill(conn *xgb.Conn) (err error) {
-	return xproto.KillClientChecked(conn, uint32(c.Window)).Check()
+func (c *Client) Kill(conn *xgb.Conn, atomWMProtocols, atomWMDeleteWindow xproto.Atom) (err error) {
+	prop, err := xproto.GetProperty(
+		conn, false, c.Window, atomWMProtocols, xproto.GetPropertyTypeAny, 0, 64).Reply()
+	if err != nil {
+		return err
+	}
+	if prop == nil {
+		return xproto.DestroyWindowChecked(conn, c.Window).Check()
+	}
+	for propValue := prop.Value; len(propValue) >= 4; propValue = propValue[4:] {
+		val := xproto.Atom(uint32(propValue[0]) | uint32(propValue[1])<<8 | uint32(propValue[2])<<16 | uint32(propValue[3])<<24)
+		if val == atomWMDeleteWindow {
+			t := time.Now().Unix()
+			return xproto.SendEventChecked(
+				conn,
+				false,
+				c.Window,
+				xproto.EventMaskNoEvent,
+				string(xproto.ClientMessageEvent{
+					Format: 32,
+					Window: c.Window,
+					Type:   atomWMProtocols,
+					Data: xproto.ClientMessageDataUnionData32New([]uint32{
+						uint32(atomWMDeleteWindow),
+						uint32(t),
+						0,
+						0,
+						0,
+					}),
+				}.Bytes())).Check()
+		}
+	}
+	return nil
 }
 
 func (c *Client) PutBelow(window xproto.Window, conn *xgb.Conn) (err error) {
