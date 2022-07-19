@@ -75,7 +75,8 @@ func ManageWindow(windowToManage xproto.Window, windowX, windowY, windowWidth, w
 		return err
 	}
 
-	c, err := NewClient(windowToManage, windowX, windowY, windowWidth, windowHeight, conn)
+	c := NewClient(windowToManage, windowX, windowY, windowWidth, windowHeight)
+	err = c.Reconfigure(conn)
 	if err != nil {
 		return err
 	}

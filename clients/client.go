@@ -9,45 +9,40 @@ type position struct{ X, Y uint32 }
 type size struct{ Width, Height uint32 }
 type client struct {
 	Window          xproto.Window
-	currentPosition position
-	currentSize     size
 	Position        position
 	Size            size
+	currentPosition position
+	currentSize     size
+	wasConfigured   bool
 }
 
-func NewClient(window xproto.Window, posX, posY, width, height uint32, conn *xgb.Conn) (c *client, err error) {
-	c = &client{
+func NewClient(window xproto.Window, posX, posY, width, height uint32) *client {
+	return &client{
 		window,
 		position{posX, posY},
 		size{width, height},
 		position{posX, posY},
 		size{width, height},
+		false,
 	}
-	var mask uint16 = xproto.ConfigWindowX |
-		xproto.ConfigWindowY |
-		xproto.ConfigWindowWidth |
-		xproto.ConfigWindowHeight
-	values := []uint32{c.Position.X, c.Position.Y, c.Size.Width, c.Size.Height}
-	err = xproto.ConfigureWindowChecked(conn, window, mask, values).Check()
-	return c, err
 }
 
 func (c *client) Reconfigure(conn *xgb.Conn) (err error) {
 	var mask uint16
 	var values []uint32
-	if c.currentPosition.X != c.Position.X {
+	if c.currentPosition.X != c.Position.X || !c.wasConfigured {
 		mask = mask | xproto.ConfigWindowX
 		values = append(values, c.Position.X)
 	}
-	if c.currentPosition.Y != c.Position.Y {
+	if c.currentPosition.Y != c.Position.Y || !c.wasConfigured {
 		mask = mask | xproto.ConfigWindowY
 		values = append(values, c.Position.Y)
 	}
-	if c.currentSize.Width != c.Size.Width {
+	if c.currentSize.Width != c.Size.Width || !c.wasConfigured {
 		mask = mask | xproto.ConfigWindowWidth
 		values = append(values, c.Size.Width)
 	}
-	if c.currentSize.Height != c.Size.Height {
+	if c.currentSize.Height != c.Size.Height || !c.wasConfigured {
 		mask = mask | xproto.ConfigWindowHeight
 		values = append(values, c.Size.Height)
 	}
@@ -57,6 +52,9 @@ func (c *client) Reconfigure(conn *xgb.Conn) (err error) {
 		if err == nil {
 			c.currentSize = c.Size
 			c.currentPosition = c.Position
+			if !c.wasConfigured {
+				c.wasConfigured = true
+			}
 		}
 	}
 	return err
