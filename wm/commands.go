@@ -27,6 +27,18 @@ func FocusTagCommand(tag int) command {
 	}
 }
 
+func MoveFocusedClientOneTagDownCommand() command {
+  return func(conn *xgb.Conn) {
+    moveFocusedClientOneTagDown()
+  }
+}
+
+func MoveFocusedClientOneTagUpCommand() command {
+  return func(conn *xgb.Conn) {
+    moveFocusedClientOneTagUp()
+  }
+}
+
 func KillFocusedClientCommand(conn *xgb.Conn) {
 	killFocusedClient(conn)
 }
