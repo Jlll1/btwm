@@ -27,7 +27,7 @@ func Pop(tag int, conn *xgb.Conn) {
 	var selectedClient Client
 	var newStack []Client
 	for _, c := range stack {
-		if c.Tag == tag {
+		if c.Tag == tag-1 {
 			selectedClient = c
 			var mask uint16 = xproto.ConfigWindowSibling | xproto.ConfigWindowStackMode
 			values := []uint32{uint32(*topClient.Window), xproto.StackModeAbove}
@@ -59,11 +59,30 @@ func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
 }
 
 func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
+	// Handle the super key
 	switch ev.Detail {
 	case 33: // 'p'
 		exec.Command("dmenu_run").Run()
-	case 67: // 'F1'
+	case 10: // '1'
 		Pop(1, conn)
+	case 11: // '2'
+		Pop(2, conn)
+	case 12: // '3'
+		Pop(3, conn)
+	case 13: // '4'
+		Pop(4, conn)
+	case 14: // '5'
+		Pop(5, conn)
+	case 15: // '6'
+		Pop(6, conn)
+	case 16: // '7'
+		Pop(7, conn)
+	case 17: // '8'
+		Pop(8, conn)
+	case 18: // '1'
+		Pop(9, conn)
+	case 19: // '10'
+		Pop(10, conn)
 	}
 }
 
@@ -110,7 +129,16 @@ func main() {
 	}
 
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 33, xproto.GrabModeAsync, xproto.GrabModeAsync)
-	xproto.GrabKey(conn, true, root, xproto.ModMask4, 67, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 10, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 11, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 12, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 13, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 14, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 15, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 16, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 17, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 18, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 19, xproto.GrabModeAsync, xproto.GrabModeAsync)
 
 	for {
 		ev, err := conn.WaitForEvent()
