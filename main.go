@@ -66,6 +66,30 @@ func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
 		conn, false, ev.Window, xproto.EventMaskStructureNotify, string(configureEvent.Bytes()))
 }
 
+func MakeTagSplit(tag int, conn *xgb.Conn) {
+	if len(stack) < 2 {
+		return
+	}
+	if stack[len(stack)-1].Tag == tag || stack[len(stack)-2].Tag == tag {
+		return
+	}
+	var newStack []Client
+	var clientToPutOnSplit Client
+	for i, c := range stack {
+		if c.Tag == tag {
+			clientToPutOnSplit = c
+			continue
+		}
+		if i == len(stack)-1 {
+			var mask uint16 = xproto.ConfigWindowSibling | xproto.ConfigWindowStackMode
+			values := []uint32{uint32(c.Window), xproto.StackModeBelow}
+			xproto.ConfigureWindowChecked(conn, clientToPutOnSplit.Window, mask, values)
+			newStack = append(newStack, clientToPutOnSplit)
+		}
+		newStack = append(newStack, c)
+	}
+}
+
 func KillSelectedTag(conn *xgb.Conn) {
 	if len(stack) < 1 {
 		return
@@ -98,6 +122,10 @@ func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
 			os.Exit(0)
 		}
 	case 10: // '1'
+		if shiftActive {
+			MakeTagSplit(1, conn)
+			break
+		}
 		Pop(1, conn)
 	case 11: // '2'
 		Pop(2, conn)
@@ -164,6 +192,7 @@ func main() {
 
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 33, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 10, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4|xproto.ModMaskShift, 10, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 11, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 12, xproto.GrabModeAsync, xproto.GrabModeAsync)
 	xproto.GrabKey(conn, true, root, xproto.ModMask4, 13, xproto.GrabModeAsync, xproto.GrabModeAsync)
