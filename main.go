@@ -8,7 +8,7 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
-var windows []*xproto.Window
+var windows []xproto.Window
 var selectedTag int
 
 func Pop(tag int, conn *xgb.Conn) {
@@ -21,7 +21,7 @@ func Pop(tag int, conn *xgb.Conn) {
 
 	var mask uint16 = xproto.ConfigWindowStackMode
 	values := []uint32{xproto.StackModeAbove}
-	xproto.ConfigureWindowChecked(conn, *windows[tag-1], mask, values)
+	xproto.ConfigureWindowChecked(conn, windows[tag-1], mask, values)
 	selectedTag = tag
 }
 
@@ -45,13 +45,13 @@ func KillSelectedTag(conn *xgb.Conn) {
 	if selectedTag < 1 || len(windows) < 1 {
 		return
 	}
-	windowToKill := *windows[selectedTag-1]
+	windowToKill := windows[selectedTag-1]
 	err := xproto.KillClientChecked(conn, uint32(windowToKill)).Check()
 	if err != nil {
 		return
 	}
 
-	var newWindows []*xproto.Window
+	var newWindows []xproto.Window
 	for i, win := range windows {
 		if i == selectedTag-1 {
 			continue
@@ -112,7 +112,7 @@ func HandleMapRequest(ev xproto.MapRequestEvent, conn *xgb.Conn, screenWidth uin
 	values := []uint32{0, 0, screenWidth, screenHeight}
 	xproto.ConfigureWindowChecked(conn, ev.Window, mask, values)
 
-	windows = append(windows, &ev.Window)
+	windows = append(windows, ev.Window)
 	selectedTag = len(windows)
 	return nil
 }
