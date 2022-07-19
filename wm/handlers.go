@@ -13,7 +13,7 @@ func HandleEvent(event xgb.Event, conn *xgb.Conn) {
 	case xproto.DestroyNotifyEvent:
 		handleDestroyNotify(ev, conn)
 	case xproto.EnterNotifyEvent:
-		handleEnterNotify(ev)
+		handleEnterNotify(ev, conn)
 	case xproto.KeyPressEvent:
 		handleKeyPress(ev, conn)
 	case xproto.MapRequestEvent:
@@ -43,11 +43,12 @@ func handleDestroyNotify(ev xproto.DestroyNotifyEvent, conn *xgb.Conn) {
 	unmanageWindow(ev.Window, conn)
 }
 
-func handleEnterNotify(ev xproto.EnterNotifyEvent) {
+func handleEnterNotify(ev xproto.EnterNotifyEvent, conn *xgb.Conn) {
 	targetClient := clients.FindByWindow(ev.Event)
 	if targetClient == nil {
 		return
 	}
+	xproto.SetInputFocusChecked(conn, xproto.InputFocusPointerRoot, targetClient.Window, xproto.TimeCurrentTime)
 	focusedClient = targetClient
 }
 
