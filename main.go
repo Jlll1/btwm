@@ -10,10 +10,57 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
+type position struct{ X, Y uint32 }
+type size struct{ Width, Height uint32 }
+
 type Client struct {
-	Window      xproto.Window
-	Tag         int
-	XPos, Width uint32
+	Window          xproto.Window
+	Tag             int
+	currentPosition position
+	currentSize     size
+	Position        position
+	Size            size
+}
+
+func NewClient(window xproto.Window, tag int, posX, posY, width, height uint32) *Client {
+	return &Client{
+		window,
+		tag,
+		position{posX, posY},
+		size{width, height},
+		position{posX, posY},
+		size{width, height},
+	}
+}
+
+func (c *Client) Reconfigure(conn *xgb.Conn) (err error) {
+	var mask uint16
+	var values []uint32
+	if c.currentPosition.X != c.Position.X {
+		mask = mask | xproto.ConfigWindowX
+		values = append(values, c.Position.X)
+	}
+	if c.currentPosition.Y != c.Position.Y {
+		mask = mask | xproto.ConfigWindowY
+		values = append(values, c.Position.Y)
+	}
+	if c.currentSize.Width != c.Size.Width {
+		mask = mask | xproto.ConfigWindowWidth
+		values = append(values, c.Size.Width)
+	}
+	if c.currentSize.Height != c.Size.Height {
+		mask = mask | xproto.ConfigWindowHeight
+		values = append(values, c.Size.Height)
+	}
+
+	if len(values) > 0 {
+		err := xproto.ConfigureWindowChecked(conn, c.Window, mask, values).Check()
+		if err == nil {
+			c.currentSize = c.Size
+			c.currentPosition = c.Position
+		}
+	}
+	return err
 }
 
 var stack []Client
@@ -45,22 +92,6 @@ func TagToClient(tag int) (client Client, err error) {
 		}
 	}
 	return client, fmt.Errorf("couldn't find client associated to specified tag")
-}
-
-func (c *Client) SetPos(conn *xgb.Conn, x, width uint32) error {
-	err := xproto.ConfigureWindowChecked(
-		conn,
-		c.Window,
-		xproto.ConfigWindowX|xproto.ConfigWindowWidth,
-		[]uint32{x, width}).Check()
-	if err != nil {
-		return err
-	}
-
-	c.XPos = x
-	c.Width = width
-
-	return nil
 }
 
 func UnmanageWindow(conn *xgb.Conn, window xproto.Window) {
@@ -160,11 +191,16 @@ func EnterSplitMode(conn *xgb.Conn, screenWidth uint32) {
 	}
 	splitWidth := screenWidth / 2
 	splitMasterClient := &stack[len(stack)-1]
-	err := splitMasterClient.SetPos(conn, 0, splitWidth)
+	splitMasterClient.Position.X = 0
+	splitMasterClient.Size.Width = splitWidth
+	err := splitMasterClient.Reconfigure(conn)
 	if err != nil {
 		return
 	}
-	err = stack[len(stack)-2].SetPos(conn, splitWidth, splitWidth)
+	splitSlaveClient := &stack[len(stack)-2]
+	splitSlaveClient.Position.X = splitWidth
+	splitSlaveClient.Size.Width = splitWidth
+	err = splitSlaveClient.Reconfigure(conn)
 	if err != nil {
 		return
 	}
@@ -177,8 +213,10 @@ func ExitSplitMode(conn *xgb.Conn, screenWidth uint32) {
 	}
 
 	for _, c := range stack {
-		if c.Width != screenWidth {
-			err := c.SetPos(conn, 0, screenWidth)
+		if c.Size.Width != screenWidth {
+			c.Position.X = 0
+			c.Size.Width = screenWidth
+			err := c.Reconfigure(conn)
 			if err != nil {
 				return
 			}
@@ -300,7 +338,7 @@ func HandleMapRequest(ev xproto.MapRequestEvent, conn *xgb.Conn, screenWidth uin
 	if err != nil {
 		return err
 	}
-	stack = append(stack, Client{ev.Window, len(stack) + 1, 0, screenWidth})
+	stack = append(stack, *NewClient(ev.Window, len(stack)+1, 0, 0, screenWidth, screenHeight))
 
 	if isInSplitMode {
 		ExitSplitMode(conn, screenWidth)
