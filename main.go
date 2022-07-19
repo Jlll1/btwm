@@ -8,38 +8,19 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
-type Client struct {
-	Tag    int
-	Window *xproto.Window
-}
-
-var stack []Client
+var windows []*xproto.Window
 
 func Pop(tag int, conn *xgb.Conn) {
-	if len(stack) < 2 {
+	if len(windows) < 2 {
 		return
 	}
-	if len(stack) < tag {
+	if len(windows) < tag {
 		return
 	}
 
-	topClient := stack[len(stack)-1]
-	var selectedClient Client
-	var newStack []Client
-	for _, c := range stack {
-		if c.Tag == tag-1 {
-			selectedClient = c
-			var mask uint16 = xproto.ConfigWindowSibling | xproto.ConfigWindowStackMode
-			values := []uint32{uint32(*topClient.Window), xproto.StackModeAbove}
-			err := xproto.ConfigureWindowChecked(conn, *selectedClient.Window, mask, values).Check()
-			if err != nil {
-				return
-			}
-			continue
-		}
-		newStack = append(newStack, c)
-	}
-	stack = append(newStack, selectedClient)
+	var mask uint16 = xproto.ConfigWindowStackMode
+	values := []uint32{xproto.StackModeAbove}
+	xproto.ConfigureWindowChecked(conn, *windows[tag-1], mask, values)
 }
 
 func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
@@ -98,7 +79,7 @@ func HandleMapRequest(ev xproto.MapRequestEvent, conn *xgb.Conn, screenWidth uin
 	values := []uint32{0, 0, screenWidth, screenHeight}
 	xproto.ConfigureWindowChecked(conn, ev.Window, mask, values)
 
-	stack = append(stack, Client{len(stack), &ev.Window})
+	windows = append(windows, &ev.Window)
 	return nil
 }
 
