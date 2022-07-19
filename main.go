@@ -8,6 +8,40 @@ import (
 	"github.com/jezek/xgb/xproto"
 )
 
+type Client struct {
+	Tag    int
+	Window *xproto.Window
+}
+
+var stack []Client
+
+func Pop(tag int, conn *xgb.Conn) {
+	if len(stack) < 2 {
+		return
+	}
+	if len(stack) < tag {
+		return
+	}
+
+	topClient := stack[len(stack)-1]
+	var selectedClient Client
+	var newStack []Client
+	for _, c := range stack {
+		if c.Tag == tag {
+			selectedClient = c
+			var mask uint16 = xproto.ConfigWindowSibling | xproto.ConfigWindowStackMode
+			values := []uint32{uint32(*topClient.Window), xproto.StackModeAbove}
+			err := xproto.ConfigureWindowChecked(conn, *selectedClient.Window, mask, values).Check()
+			if err != nil {
+				return
+			}
+			continue
+		}
+		newStack = append(newStack, c)
+	}
+	stack = append(newStack, selectedClient)
+}
+
 func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
 	configureEvent := xproto.ConfigureNotifyEvent{
 		Event:            ev.Window,
@@ -24,10 +58,12 @@ func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
 		conn, false, ev.Window, xproto.EventMaskStructureNotify, string(configureEvent.Bytes()))
 }
 
-func HandleKeyPress(ev xproto.KeyPressEvent) {
-	// 'p'
-	if ev.Detail == 33 {
+func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
+	switch ev.Detail {
+	case 33: // 'p'
 		exec.Command("dmenu_run").Run()
+	case 67: // 'F1'
+		Pop(1, conn)
 	}
 }
 
@@ -43,6 +79,7 @@ func HandleMapRequest(ev xproto.MapRequestEvent, conn *xgb.Conn, screenWidth uin
 	values := []uint32{0, 0, screenWidth, screenHeight}
 	xproto.ConfigureWindowChecked(conn, ev.Window, mask, values)
 
+	stack = append(stack, Client{len(stack), &ev.Window})
 	return nil
 }
 
@@ -72,6 +109,9 @@ func main() {
 		log.Fatal(err)
 	}
 
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 33, xproto.GrabModeAsync, xproto.GrabModeAsync)
+	xproto.GrabKey(conn, true, root, xproto.ModMask4, 67, xproto.GrabModeAsync, xproto.GrabModeAsync)
+
 	for {
 		ev, err := conn.WaitForEvent()
 		if err != nil {
@@ -83,7 +123,7 @@ func main() {
 
 		switch event := ev.(type) {
 		case xproto.KeyPressEvent:
-			HandleKeyPress(event)
+			HandleKeyPress(event, conn)
 		case xproto.ConfigureRequestEvent:
 			HandleConfigureRequest(event, conn)
 		case xproto.MapRequestEvent:
