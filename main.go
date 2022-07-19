@@ -5,126 +5,28 @@ import (
 	"os"
 	"os/exec"
 
+	"github.com/Jlll1/btwm/clients"
 	"github.com/jezek/xgb"
 	"github.com/jezek/xgb/xproto"
 )
 
-type position struct{ X, Y uint32 }
-type size struct{ Width, Height uint32 }
-type Client struct {
-	Window          xproto.Window
-	currentPosition position
-	currentSize     size
-	Position        position
-	Size            size
-}
-
-func NewClient(window xproto.Window, posX, posY, width, height uint32) *Client {
-	return &Client{
-		window,
-		position{posX, posY},
-		size{width, height},
-		position{posX, posY},
-		size{width, height},
-	}
-}
-
-func (c *Client) Reconfigure(conn *xgb.Conn) (err error) {
-	var mask uint16
-	var values []uint32
-	if c.currentPosition.X != c.Position.X {
-		mask = mask | xproto.ConfigWindowX
-		values = append(values, c.Position.X)
-	}
-	if c.currentPosition.Y != c.Position.Y {
-		mask = mask | xproto.ConfigWindowY
-		values = append(values, c.Position.Y)
-	}
-	if c.currentSize.Width != c.Size.Width {
-		mask = mask | xproto.ConfigWindowWidth
-		values = append(values, c.Size.Width)
-	}
-	if c.currentSize.Height != c.Size.Height {
-		mask = mask | xproto.ConfigWindowHeight
-		values = append(values, c.Size.Height)
-	}
-
-	if len(values) > 0 {
-		err := xproto.ConfigureWindowChecked(conn, c.Window, mask, values).Check()
-		if err == nil {
-			c.currentSize = c.Size
-			c.currentPosition = c.Position
-		}
-	}
-	return err
-}
-
-func (c *Client) Focus(conn *xgb.Conn) error {
-	return xproto.ConfigureWindowChecked(
-		conn,
-		c.Window,
-		xproto.ConfigWindowStackMode,
-		[]uint32{xproto.StackModeAbove}).Check()
-}
-
-var clients []*Client
-
-func FindClient(predicate func(*Client) bool) *Client {
-	for _, c := range clients {
-		if predicate(c) {
-			return c
-		}
-	}
-	return nil
-}
-
-func FindClientByWindow(window xproto.Window) *Client {
-	return FindClient(func(c *Client) bool { return c.Window == window })
-}
-
-func FindClientByTag(tag int) *Client {
-	return clients[tag-1]
-}
-
-func RemoveClientByWindow(window xproto.Window) {
-	var newClients []*Client
-	for _, c := range clients {
-		if c.Window != window {
-			newClients = append(newClients, c)
-		}
-	}
-	clients = newClients
-}
-
-var screenWidth, screenHeight uint32
-var focusedClient *Client
-var isInSplitMode bool
-
 func HandleEnterNotifyEvent(ev xproto.EnterNotifyEvent) {
-	targetClient := FindClientByWindow(ev.Event)
+	targetClient := clients.FindByWindow(ev.Event)
 	if targetClient == nil {
 		return
 	}
-	focusedClient = targetClient
+	clients.FocusedClient = targetClient
 }
 
 func UnmanageWindow(conn *xgb.Conn, window xproto.Window) {
-	RemoveClientByWindow(window)
-
-	if isInSplitMode {
-		ExitSplitMode(conn, screenWidth)
+	clients.UnmanageWindow(window)
+	if clients.IsInSplitMode {
+		clients.ExitSplitMode(conn, clients.ScreenWidth)
 	}
 }
 
 func FocusTag(tag int, conn *xgb.Conn) {
-	if len(clients) < 2 {
-		return
-	}
-	if len(clients) < tag || tag < 1 {
-		return
-	}
-
-	clientToPutOnTop := FindClientByTag(tag)
+	clientToPutOnTop := clients.FindByTag(tag)
 	if clientToPutOnTop == nil {
 		return
 	}
@@ -132,8 +34,8 @@ func FocusTag(tag int, conn *xgb.Conn) {
 		return
 	}
 
-	if isInSplitMode {
-		ExitSplitMode(conn, screenWidth)
+	if clients.IsInSplitMode {
+		clients.ExitSplitMode(conn, clients.ScreenWidth)
 	}
 }
 
@@ -153,66 +55,13 @@ func HandleConfigureRequest(ev xproto.ConfigureRequestEvent, conn *xgb.Conn) {
 		conn, false, ev.Window, xproto.EventMaskStructureNotify, string(configureEvent.Bytes()))
 }
 
-func MakeTagSplit(tag int, conn *xgb.Conn) {
-	if len(clients) < 2 {
-		return
-	}
-	if isInSplitMode {
-		ExitSplitMode(conn, screenWidth)
-	}
-	splitMasterClient := focusedClient
-	splitSlaveClient := FindClientByTag(tag)
-	if splitSlaveClient == nil {
-		return
-	}
-
-	var mask uint16 = xproto.ConfigWindowSibling | xproto.ConfigWindowStackMode
-	values := []uint32{uint32(splitMasterClient.Window), xproto.StackModeBelow}
-	err := xproto.ConfigureWindowChecked(conn, splitSlaveClient.Window, mask, values).Check()
-	if err != nil {
-		return
-	}
-
-	splitWidth := screenWidth / 2
-	splitMasterClient.Position.X = 0
-	splitMasterClient.Size.Width = splitWidth
-	err = splitMasterClient.Reconfigure(conn)
-	if err != nil {
-		return
-	}
-	splitSlaveClient.Position.X = splitWidth
-	splitSlaveClient.Size.Width = splitWidth
-	err = splitSlaveClient.Reconfigure(conn)
-	if err != nil {
-		return
-	}
-	isInSplitMode = true
-}
-
-func ExitSplitMode(conn *xgb.Conn, screenWidth uint32) {
-	for _, c := range clients {
-		if c.Size.Width != screenWidth {
-			c.Position.X = 0
-			c.Size.Width = screenWidth
-			err := c.Reconfigure(conn)
-			if err != nil {
-				return
-			}
-		}
-	}
-	isInSplitMode = false
-}
-
 func KillSelectedClient(conn *xgb.Conn) {
-	if len(clients) < 1 {
-		return
-	}
-	err := xproto.KillClientChecked(conn, uint32(focusedClient.Window)).Check()
+	err := xproto.KillClientChecked(conn, uint32(clients.FocusedClient.Window)).Check()
 	if err != nil {
 		return
 	}
 
-	UnmanageWindow(conn, focusedClient.Window)
+	UnmanageWindow(conn, clients.FocusedClient.Window)
 }
 
 func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
@@ -236,61 +85,61 @@ func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
 		}
 	case 10: // '1'
 		if shiftActive {
-			MakeTagSplit(1, conn)
+			clients.MakeTagSplit(1, conn)
 			break
 		}
 		FocusTag(1, conn)
 	case 11: // '2'
 		if shiftActive {
-			MakeTagSplit(2, conn)
+			clients.MakeTagSplit(2, conn)
 			break
 		}
 		FocusTag(2, conn)
 	case 12: // '3'
 		if shiftActive {
-			MakeTagSplit(3, conn)
+			clients.MakeTagSplit(3, conn)
 			break
 		}
 		FocusTag(3, conn)
 	case 13: // '4'
 		if shiftActive {
-			MakeTagSplit(4, conn)
+			clients.MakeTagSplit(4, conn)
 			break
 		}
 		FocusTag(4, conn)
 	case 14: // '5'
 		if shiftActive {
-			MakeTagSplit(5, conn)
+			clients.MakeTagSplit(5, conn)
 			break
 		}
 		FocusTag(5, conn)
 	case 15: // '6'
 		if shiftActive {
-			MakeTagSplit(6, conn)
+			clients.MakeTagSplit(6, conn)
 			break
 		}
 		FocusTag(6, conn)
 	case 16: // '7'
 		if shiftActive {
-			MakeTagSplit(7, conn)
+			clients.MakeTagSplit(7, conn)
 			break
 		}
 		FocusTag(7, conn)
 	case 17: // '8'
 		if shiftActive {
-			MakeTagSplit(8, conn)
+			clients.MakeTagSplit(8, conn)
 			break
 		}
 		FocusTag(8, conn)
 	case 18: // '1'
 		if shiftActive {
-			MakeTagSplit(9, conn)
+			clients.MakeTagSplit(9, conn)
 			break
 		}
 		FocusTag(9, conn)
 	case 19: // '10'
 		if shiftActive {
-			MakeTagSplit(10, conn)
+			clients.MakeTagSplit(10, conn)
 			break
 		}
 		FocusTag(10, conn)
@@ -298,28 +147,10 @@ func HandleKeyPress(ev xproto.KeyPressEvent, conn *xgb.Conn) {
 }
 
 func HandleMapRequest(ev xproto.MapRequestEvent, conn *xgb.Conn, screenWidth uint32, screenHeight uint32) (err error) {
-	err = xproto.ChangeWindowAttributesChecked(conn, ev.Window, xproto.CwEventMask, []uint32{xproto.EventMaskEnterWindow}).Check()
-	if err != nil {
-		return err
-	}
+	clients.ManageWindow(ev.Window, 0, 0, screenHeight, screenHeight, conn)
 
-	err = xproto.MapWindowChecked(conn, ev.Window).Check()
-	if err != nil {
-		return err
-	}
-	var mask uint16 = xproto.ConfigWindowX |
-		xproto.ConfigWindowY |
-		xproto.ConfigWindowWidth |
-		xproto.ConfigWindowHeight
-	values := []uint32{0, 0, screenWidth, screenHeight}
-	err = xproto.ConfigureWindowChecked(conn, ev.Window, mask, values).Check()
-	if err != nil {
-		return err
-	}
-	clients = append(clients, NewClient(ev.Window, 0, 0, screenWidth, screenHeight))
-
-	if isInSplitMode {
-		ExitSplitMode(conn, screenWidth)
+	if clients.IsInSplitMode {
+		clients.ExitSplitMode(conn, screenWidth)
 	}
 
 	return nil
@@ -337,8 +168,8 @@ func main() {
 	}
 
 	screen := connInfo.DefaultScreen(conn)
-	screenWidth = uint32(screen.WidthInPixels)
-	screenHeight = uint32(screen.HeightInPixels)
+	clients.ScreenWidth = uint32(screen.WidthInPixels)
+	clients.ScreenHeight = uint32(screen.HeightInPixels)
 	root := screen.Root
 
 	mask := []uint32{
@@ -394,7 +225,7 @@ func main() {
 		case xproto.ConfigureRequestEvent:
 			HandleConfigureRequest(event, conn)
 		case xproto.MapRequestEvent:
-			HandleMapRequest(event, conn, uint32(screenWidth), uint32(screenHeight))
+			HandleMapRequest(event, conn, uint32(clients.ScreenWidth), uint32(clients.ScreenHeight))
 		case xproto.UnmapNotifyEvent:
 			UnmanageWindow(conn, event.Window)
 		case xproto.DestroyNotifyEvent:
